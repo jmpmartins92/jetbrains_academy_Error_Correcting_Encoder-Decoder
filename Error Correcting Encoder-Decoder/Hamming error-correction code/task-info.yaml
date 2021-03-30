@@ -1,0 +1,1047 @@
+type: edu
+custom_name: stage5
+files:
+- name: src/correcter/Main.java
+  visible: true
+  text: |
+    package correcter;
+
+    public class Main {
+        public static void main(String[] args) {
+            System.out.println("Hello World!");
+        }
+    }
+  learner_created: false
+- name: test/CorrecterTest.java
+  visible: false
+  text: |+
+    import org.hyperskill.hstest.testcase.CheckResult;
+    import org.hyperskill.hstest.stage.StageTest;
+    import org.hyperskill.hstest.testcase.TestCase;
+
+    import java.io.File;
+    import java.io.FileInputStream;
+    import java.io.FileNotFoundException;
+    import java.io.IOException;
+    import java.util.ArrayList;
+    import java.util.List;
+
+    class TestClue {
+        String input;
+        String fileContent;
+
+        TestClue(String input, String fileContent) {
+            this.input = input;
+            this.fileContent = fileContent;
+        }
+    }
+
+    public class CorrecterTest extends StageTest<TestClue> {
+
+        private static File received = null;
+        private static File encoded = null;
+        private static File decoded = null;
+
+        @Override
+        public List<TestCase<TestClue>> generate() {
+            TestClue[] testClues = new TestClue[]{
+                new TestClue("encode", "Eat more of these french buns!"),
+                new TestClue("send",   "Eat more of these french buns!"),
+                new TestClue("decode", "Eat more of these french buns!"),
+
+                new TestClue("encode", "$ome rand0m messAge"),
+                new TestClue("send",   "$ome rand0m messAge"),
+                new TestClue("decode", "$ome rand0m messAge"),
+
+                new TestClue("encode", "better call Saul 555-00-73!"),
+                new TestClue("send",   "better call Saul 555-00-73!"),
+                new TestClue("decode", "better call Saul 555-00-73!"),
+
+                new TestClue("encode", "5548172 6548 225147 23656595 5155"),
+                new TestClue("send",   "5548172 6548 225147 23656595 5155"),
+                new TestClue("decode", "5548172 6548 225147 23656595 5155"),
+            };
+
+            List<TestCase<TestClue>> result = new ArrayList<>();
+
+            for (int i = 0; i < testClues.length; i++) {
+                result.add(new TestCase<TestClue>()
+                    .setAttach(testClues[i])
+                    .setInput(testClues[i].input)
+                    .addFile("send.txt", testClues[i].fileContent));
+            }
+
+            return result;
+        }
+
+        @Override
+        public CheckResult check(String reply, TestClue clue) {
+            String path = System.getProperty("user.dir");
+
+            received = null;
+            encoded = null;
+            decoded = null;
+
+            searchReceived();
+            searchEncoded();
+            searchDecoded();
+
+            String correctFileBinary = toBinary(clue.fileContent.getBytes());
+            String correctFileEncoded = encodeFile(correctFileBinary);
+
+            String action = clue.input;
+
+            if (action.equals("encode")) {
+
+                if (encoded == null) {
+                    return new CheckResult(false,
+                        "Can't find encoded.txt file. " +
+                            "Make sure your program writes it down or " +
+                            "make sure the name of file is correct.");
+                }
+
+                byte[] encodedContent;
+                FileInputStream encodedStream;
+
+                try {
+                    encodedStream = new FileInputStream(encoded);
+                } catch (FileNotFoundException e) {
+                    return new CheckResult(false,
+                        "Can't find received.txt file. " +
+                            "Make sure your program writes it down or " +
+                            "make sure the name of file is correct.");
+                }
+
+                try {
+                    encodedContent = encodedStream.readAllBytes();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    throw new RuntimeException("Can't read the file");
+                }
+
+                String encodedBinary = toBinary(encodedContent);
+
+                return new CheckResult(encodedBinary.equals(correctFileEncoded));
+            }
+
+            if (action.equals("send")) {
+
+                if (received == null) {
+                    return new CheckResult(false,
+                        "Can't find received.txt file. " +
+                            "Make sure your program writes it " +
+                            "down or make sure the name of file is correct.");
+                }
+
+                byte[] receivedContent;
+
+                FileInputStream receivedStream;
+
+                try {
+                    receivedStream = new FileInputStream(received);
+                } catch (FileNotFoundException e) {
+                    return new CheckResult(false,
+                        "Can't find received.txt file. " +
+                            "Make sure your program writes it down or " +
+                            "make sure the name of file is correct.");
+                }
+
+                try {
+                    receivedContent = receivedStream.readAllBytes();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    throw new RuntimeException("Can't read the file");
+                }
+
+                String receivedBinary = toBinary(receivedContent);
+
+
+                return checkDifference(receivedBinary, correctFileEncoded);
+            }
+
+
+
+            if (action.equals("decode")) {
+
+                if (decoded == null) {
+                    return new CheckResult(false,
+                        "Can't find decoded.txt file. " +
+                            "Make sure your program writes it down or " +
+                            "make sure the name of file is correct.");
+                }
+
+                byte[] decodedContent;
+
+
+                FileInputStream decodedStream;
+
+                try {
+                    decodedStream = new FileInputStream(decoded);
+                } catch (FileNotFoundException e) {
+                    return new CheckResult(false,
+                        "Can't find received.txt file. " +
+                            "Make sure your program writes it down or " +
+                            "make sure the name of file is correct.");
+                }
+
+                try {
+                    decodedContent = decodedStream.readAllBytes();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    throw new RuntimeException("Can't read the file");
+                }
+
+                String decodedBinary = toBinary(decodedContent);
+
+                if (!decodedBinary.equals(correctFileBinary)) {
+                    return new CheckResult(false, "The decoded text must match initial text!");
+                }
+
+                return CheckResult.correct();
+            }
+
+            throw new RuntimeException("Can't check the program");
+        }
+
+        private static String toBinary(byte[] bytes) {
+            StringBuilder sb = new StringBuilder(bytes.length * Byte.SIZE);
+            for (int i = 0; i < Byte.SIZE * bytes.length; i++) {
+                sb.append((bytes[i / Byte.SIZE] << i % Byte.SIZE & 0x80) == 0 ? '0' : '1');
+            }
+            return sb.toString();
+        }
+
+        private static byte[] fromBinary(String s) {
+            int sLen = s.length();
+            byte[] toReturn = new byte[(sLen + Byte.SIZE - 1) / Byte.SIZE];
+            char c;
+            for (int i = 0; i < sLen; i++)
+                if ((c = s.charAt(i)) == '1')
+                    toReturn[i / Byte.SIZE] = (byte) (toReturn[i / Byte.SIZE] | (0x80 >>> (i % Byte.SIZE)));
+                else if (c != '0')
+                    throw new IllegalArgumentException();
+            return toReturn;
+        }
+
+        private static void searchReceived() {
+            File file = new File("received.txt");
+            if (file.exists()) {
+                received = file;
+            }
+        }
+
+        private static void searchEncoded() {
+            File file = new File("encoded.txt");
+            if (file.exists()) {
+                encoded = file;
+            }
+        }
+
+        private static void searchDecoded() {
+            File file = new File("decoded.txt");
+            if (file.exists()) {
+                decoded = file;
+            }
+        }
+
+        private String encodeFile(String binaryString) {
+
+            String encoded = "";
+
+            for (int i = 0; i < binaryString.length(); i += 4) {
+
+                if (i + 4 > binaryString.length()) {
+                    throw new RuntimeException("Can't decode binary data");
+                }
+
+                int startSubIndex = i;
+                int stopSubIndex = i + 4;
+
+                String currSub = binaryString.substring(startSubIndex, stopSubIndex);
+
+                String encodedPart;
+
+                int parityBit1 = 0;
+                int parityBit2 = 0;
+                int parityBit4 = 0;
+
+                if (currSub.charAt(0) == '1') {
+                    parityBit1++;
+                    parityBit2++;
+                }
+
+                if (currSub.charAt(1) == '1') {
+                    parityBit1++;
+                    parityBit4++;
+                }
+
+                if (currSub.charAt(2) == '1') {
+                    parityBit2++;
+                    parityBit4++;
+                }
+
+                if (currSub.charAt(3) == '1') {
+                    parityBit1++;
+                    parityBit2++;
+                    parityBit4++;
+                }
+
+                encodedPart =
+                    (parityBit1 % 2 == 1? "1": "0") +
+                    (parityBit2 % 2 == 1? "1": "0") +
+                    currSub.charAt(0) +
+                    (parityBit4 % 2 == 1? "1": "0") +
+                    currSub.charAt(1) +
+                    currSub.charAt(2) +
+                    currSub.charAt(3) +
+                    "0";
+
+                encoded += encodedPart;
+            }
+
+            return encoded;
+        }
+
+        private CheckResult checkDifference(String output, String correct) {
+            if (output.isEmpty() && correct.isEmpty()) return CheckResult.correct();
+
+            if (output.length() != correct.length()) {
+                return new CheckResult(false,
+                    "The program was expected to output " +
+                        correct.length() / 8 +
+                        " bytes, but output " +
+                        output.length() / 8);
+            }
+
+            for (int i = 0; i < output.length(); i += 8) {
+                String currOutputByte = output.substring(i, i+8);
+                String currCorrectByte = correct.substring(i, i+8);
+
+                int difference = 0;
+                for (int j = 0; j < currCorrectByte.length(); j++) {
+                    char currOutputBit = currOutputByte.charAt(j);
+                    char currCorrectBit = currCorrectByte.charAt(j);
+
+                    if (currCorrectBit != currOutputBit) {
+                        difference++;
+                    }
+                }
+
+                if (difference == 0) {
+                    return new CheckResult(false,
+                        "One of bytes from the input stayed the same but should be changed");
+                }
+
+                if (difference != 1) {
+                    return new CheckResult(false,
+                        "One of bytes from the input was changes in more than one bit");
+                }
+            }
+
+            return CheckResult.correct();
+        }
+    }
+
+  learner_created: false
+- name: src/correcter/StringProcessor.java
+  visible: true
+  text: |+
+    package correcter;
+
+    import java.math.BigInteger;
+
+    import static correcter.Main.ERROR_INTERVAL;
+
+    public class StringProcessor {
+
+        /*
+         * Creates an array of substrings which will later be processed individually
+         */
+        private String[] stringBreaker(String input) {
+
+            //calculation of how many sequences will be processed, round up;
+            int brokenInputLength = (int) Math.ceil((((double) input.length()) / ((double) ERROR_INTERVAL)));
+            String[] brokenInput = new String[brokenInputLength];
+
+            int indexLastBreak = 0;
+
+            //adding each sequence to a separate string, apart from the last sequence of input
+            if (brokenInputLength > 1) {
+                for (int index = 0; index < brokenInputLength - 1; index++) {
+                    brokenInput[index] = input.substring(ERROR_INTERVAL * index, ERROR_INTERVAL * index + ERROR_INTERVAL);
+
+                    //keeps track of the index of the last sequence
+                    indexLastBreak = ERROR_INTERVAL * index + ERROR_INTERVAL - 1;
+                }
+
+
+                //addition of the last substring, avoiding IndexOutOfBounds errors
+                if (brokenInputLength >= ERROR_INTERVAL) {
+                    brokenInput[brokenInputLength - 1] = input.substring(indexLastBreak + 1);
+                }
+            } else {
+                //case if input is the same length as the interval
+                brokenInput[0] = input;
+            }
+
+            return brokenInput;
+        }
+
+        /*
+         * Changes a single random char from the sequence to other random char, as long as sequence is within chosen interval
+         */
+        private String errorCauser(String sequence) {
+
+            char[] errorSequence = sequence.toCharArray();
+            if (errorSequence.length == ERROR_INTERVAL) {
+                char randomChar = Randomizer.charPick();
+                int randomIndex = Randomizer.indexPick();
+                //certifies that the chosen random char will not be the same as the original one
+                while (errorSequence[randomIndex] == randomChar) {
+                    randomChar = Randomizer.charPick();
+                }
+                errorSequence[randomIndex] = randomChar;
+            }
+
+            //Builds the String from the array
+            StringBuilder errorSequenceOutput = new StringBuilder();
+
+            for (char letter : errorSequence) {
+                errorSequenceOutput.append(letter);
+            }
+            return errorSequenceOutput.toString();
+        }
+
+        /*
+         * Takes a given string and return a string with a single error per defined interval
+         */
+        public String errorInput(String multiplicatedString) {
+            String[] brokenInput = stringBreaker(multiplicatedString);
+            StringBuilder errorOutput = new StringBuilder();
+            for (String sequence : brokenInput) {
+                sequence = errorCauser(sequence);
+                errorOutput.append(sequence);
+            }
+            return errorOutput.toString();
+        }
+
+        /*
+         * Repeats each letter "interval" times
+         */
+        public String multiplicatedString(String input) {
+            StringBuilder multiplicatedString = new StringBuilder();
+            char[] inputArray = input.toCharArray();
+            for (char letter : inputArray) {
+                for (int sumLetters = 0; sumLetters < ERROR_INTERVAL; sumLetters++) {
+                    multiplicatedString.append(letter);
+                }
+            }
+            return multiplicatedString.toString();
+        }
+
+
+        /*
+         * Given a sequence of 3 chars, returns the one that occurs two times
+         */
+        private char findCorrectLetter(String errorSequence) {
+            char firstLetter = errorSequence.charAt(0);
+            char secondLetter = errorSequence.charAt(1);
+            char thirdLetter = errorSequence.charAt(2);
+
+            if (firstLetter == secondLetter || firstLetter == thirdLetter) {
+                return firstLetter;
+            } else {
+                return secondLetter;
+
+            }
+        }
+
+        /*
+         * Returns the string cleaning the simulated errors and redundancy
+         */
+        public String cleanInput(String errorSimulatedString) {
+            StringBuilder cleanString = new StringBuilder();
+            String[] errorSequences = stringBreaker(errorSimulatedString);
+            for (String sequence : errorSequences) {
+                char correctLetter = findCorrectLetter(sequence);
+                cleanString.append(correctLetter);
+            }
+            return cleanString.toString();
+        }
+
+        /*
+         * Converts a normal string to a hex Array
+         */
+        public String[] stringToHex(String stringToHex) {
+            char[] hexArray = stringToHex.toCharArray();
+            String[] hexStringArray = new String[stringToHex.length()];
+            for (int i = 0; i < hexArray.length; i++) {
+                hexStringArray[i] = Integer.toHexString(hexArray[i]);
+            }
+            return hexStringArray;
+        }
+
+        public String hexStringToText(String stringHex) {
+            String[] hexArray = stringHex.split(" ");
+            StringBuilder text = new StringBuilder();
+            for (String hex : hexArray) {
+                text.append((char) Integer.parseInt(hex, 16));
+            }
+            return text.toString();
+        }
+
+        /*
+         * Returns a string with a more readable format of the hex String array
+         */
+        public String formatHexArray(String[] hexStringArray) {
+            StringBuilder auxString = new StringBuilder();
+            for (int charIndex = 0; charIndex < hexStringArray.length; charIndex++) {
+                auxString.append(hexStringArray[charIndex] + " ");
+            }
+            return auxString.toString();
+        }
+
+        /*
+         * Creates an array of bytes from a given String
+         */
+        public byte[] stringToByteArray(String string) {
+            char[] arrayString = string.toCharArray();
+            byte[] byteArray = new byte[arrayString.length];
+
+            for (int i = 0; i < arrayString.length; i++) {
+                byteArray[i] = (byte)arrayString[i];
+            }
+            return byteArray;
+        }
+
+        /*
+         * Creates a byte array from a string of bytes
+         */
+        public byte[] byteStringToArray(String byteString) {
+            String[] byteStringArray = byteString.split(" ");
+            byte[] byteArray = new byte[byteStringArray.length];
+            for (int byteIndex = 0; byteIndex < byteStringArray.length; byteIndex++) {
+                byteArray[byteIndex] = (byte) Integer.parseInt(byteStringArray[byteIndex], 2);
+            }
+            return byteArray;
+        }
+
+        /*
+         * Returns a byte representation as string, with 8 bits;
+         */
+        public String byteToString(byte b) {
+            StringBuilder bString = new StringBuilder();
+            bString.append(Integer.toBinaryString(b));
+            if (bString.length() > 8) {
+                bString.delete(0, 24);
+            }
+            while (bString.length() < 8) {
+                bString.insert(0, "0");
+            }
+            return bString.toString();
+        }
+
+        /*
+         * Returns a string with a more readable format of the byte array
+         */
+        public String byteArrayToString(byte[] byteArray) {
+            StringBuilder auxString = new StringBuilder();
+            for (byte b : byteArray) {
+                auxString.append(byteToString(b) + " ");
+            }
+            return auxString.toString();
+        }
+
+        /*
+         * Duplicates each bit in a byte array and adds space for bits of parity, expanding the input
+         */
+        public String expandedBytes(byte[] inputByteArray) {
+            String bitString = byteArrayToString(inputByteArray).replace(" ", "");
+            StringBuilder expandedByte = new StringBuilder();
+            int bitNumber = 0;
+            for (char bit : bitString.toCharArray()) {
+
+                if (bitNumber == 3) {
+                    expandedByte.append(".. ");
+                    bitNumber = 0;
+                }
+                expandedByte.append(bit).append(bit);
+                bitNumber++;
+            }
+            while ((expandedByte.length() + 1 ) % 9  != 0) {
+                expandedByte.append("..");
+            }
+            return expandedByte.toString();
+        }
+
+        /*
+         * Returns a string with a more readable format of a String array
+         */
+        public String stringFromStringArray(String[] StringArray) {
+            StringBuilder auxString = new StringBuilder();
+            for (String value : StringArray) {
+                auxString.append(value + " ");
+            }
+            auxString.replace(auxString.length() - 1, auxString.length() - 1, "");
+            return auxString.toString();
+        }
+
+        /*
+         * Returns an array of bytes with parity
+         */
+        public String[] parityBytes(String expandedBytes) {
+            String[] expandedByteArray = expandedBytes.split(" ");
+            String[] parityByteArray = new String[expandedByteArray.length];
+            for (int byteIndex = 0; byteIndex < expandedByteArray.length; byteIndex++) {
+                parityByteArray[byteIndex] = byteParity(expandedByteArray[byteIndex]);
+            }
+            return parityByteArray;
+        }
+
+
+
+        /*
+         * Replaces the dots into bits of parity
+         */
+        public String byteParity (String byteExpanded) {
+            int firstBit = Character.getNumericValue(byteExpanded.charAt(0));
+            int secondBit = Character.getNumericValue(byteExpanded.charAt(2));
+            int thirdBit = Character.getNumericValue(byteExpanded.charAt(4));
+            if (byteExpanded.charAt(2) == '.') {
+                byteExpanded = byteExpanded.replaceFirst("\\.\\.\\.\\.", "0000");
+            }
+            if (byteExpanded.charAt(4) == '.') {
+                byteExpanded = byteExpanded.replaceFirst("\\.\\.", "00");
+            }
+            int parity = (Character.getNumericValue(byteExpanded.charAt(0))
+                    ^ Character.getNumericValue(byteExpanded.charAt(2))
+                    ^ Character.getNumericValue(byteExpanded.charAt(4)));
+            return byteExpanded.replaceAll("\\.", String.valueOf(parity));
+        }
+
+        /*
+         * returns an hex String array from a byte String array
+         */
+        public String[] byteArrayToHexArray(String[] byteArray) {
+            String[] hexArray = new String[byteArray.length];
+            byte[] byteArrayAux = new byte[byteArray.length];
+            for (int index = 0; index < byteArray.length; index++) {
+                byteArrayAux[index] = (byte) Integer.parseInt(byteArray[index], 2);
+            }
+            for (int index = 0; index < byteArray.length; index++) {
+                hexArray[index] = String.format("%02X", byteArrayAux[index]);
+            }
+            return hexArray;
+        }
+
+        /*
+         * Corrects a String array of bytes
+         */
+        public String[] correctByteStrings(String[] byteStringArrays) {
+            String[] correctByteStrings = new String[byteStringArrays.length];
+            for (int index = 0; index < correctByteStrings.length; index++) {
+                correctByteStrings[index] = correctByte(byteStringArrays[index]);
+            }
+            return correctByteStrings;
+        }
+
+
+
+        /*
+         * Corrects the bytes by checking which pairs do not present the same value.
+         */
+        public String correctByte(String byteString) {
+            StringBuilder correctByte = new StringBuilder();
+            int firstBit = Character.getNumericValue(byteString.charAt(0));
+            int secondBit = Character.getNumericValue(byteString.charAt(2));
+            int thirdBit = Character.getNumericValue(byteString.charAt(4));
+            int parity = Character.getNumericValue(byteString.charAt(6));
+
+            if (parity != Character.getNumericValue(byteString.charAt(7))) {
+
+                correctByte.append(byteString, 0, 6);
+
+                parity = (firstBit ^ secondBit ^ thirdBit);
+                correctByte.append(parity).append(parity);
+                return correctByte.toString();
+
+            } else if (firstBit != Character.getNumericValue(byteString.charAt(1))) {
+                int correctBit = secondBit ^ thirdBit ^ parity;
+                correctByte.append(correctBit).append(correctBit).append(byteString, 2, 8);
+                return correctByte.toString();
+            } else if (secondBit != Character.getNumericValue(byteString.charAt(3))) {
+                int correctBit = firstBit ^ thirdBit ^ parity;
+                correctByte.append(byteString, 0, 2).append(correctBit).append(correctBit).append(byteString, 4, 8);
+                return correctByte.toString();
+            } else if (thirdBit != Character.getNumericValue(byteString.charAt(5))) {
+                int correctBit = firstBit ^ secondBit ^ parity;
+                correctByte.append(byteString, 0, 4).append(correctBit).append(correctBit).append(byteString, 6, 8);
+                return correctByte.toString();
+            } else {
+                return "error not found";
+            }
+
+        }
+
+        /*
+         * decodes the full corrected string by removing duplicates of the entire byte string.
+         */
+        public String decodedByteString(String byteString) {
+            StringBuilder decodedBytes = new StringBuilder();
+            String cleanByteString = byteString.replace("00 ", "").replace("11 ", "");
+            int intervalCounter = 0;
+
+            for (int bitIndex = 0; bitIndex < cleanByteString.length(); bitIndex = bitIndex + 2) {
+                decodedBytes.append(cleanByteString.charAt(bitIndex));
+                if (decodedBytes.length() == 8) {
+                    decodedBytes.append(" ");
+                    intervalCounter++;
+                } else if ((decodedBytes.length() - 1 * intervalCounter) % 8 == 0 && decodedBytes.length() > 8) {
+                    decodedBytes.append(" ");
+                    intervalCounter++;
+                }
+            }
+            return decodedBytes.toString();
+        }
+
+        /*
+         * Removes useless last 0 bits
+         */
+        public String removeLastByte(String byteString) {
+            String[] bytes = byteString.split(" ");
+            StringBuilder cleanString = new StringBuilder();
+            if (!bytes[bytes.length - 1].contains("1")) {
+                for (int byteIndex = 0; byteIndex < bytes.length - 1 ; byteIndex++) {
+                    cleanString.append(bytes[byteIndex] + " ");
+                }
+                return cleanString.deleteCharAt(cleanString.length() - 1).toString();
+            } else {
+                return byteString;
+            }
+        }
+
+
+
+    }
+
+  learner_created: true
+- name: decoded.txt
+  visible: true
+  text: 5548172 6548 225147 23656595 5155
+  learner_created: true
+- name: src/correcter/Randomizer.java
+  visible: true
+  text: |
+    package correcter;
+
+    import java.util.Random;
+    import static correcter.Main.ERROR_INTERVAL;
+
+    public class Randomizer {
+
+        /*
+         * Picks which char will be changed within a sequence
+         */
+        public static int indexPick() {
+            Random random = new Random();
+            return random.nextInt(ERROR_INTERVAL);
+        }
+
+        /*
+         * Picks a random char, between any upper and lower case letters, digits, and space
+         */
+        public static char charPick() {
+
+            //smallest and largest Ascii code within chosen possible characters
+            int charCode_Space = 32;
+            int charCode_z = 122;
+
+            //possible characters
+            String regex = "[a-zA-Z0-9 ]";
+
+            Random random = new Random();
+            Character pickedChar = '.';
+            //certifies that the randomly picked char matches possible characters
+            while (!pickedChar.toString().matches(regex)) {
+                pickedChar = (char) (random.nextInt(charCode_z - charCode_Space + 1) + charCode_Space);
+            }
+            return pickedChar;
+        }
+
+        /*
+         * Changes randomly a single bit in every given byte of a byteArray
+         */
+        public byte[] byteRandomizer(byte[] inputBytes) {
+            Random random = new Random();
+            int byteLength = 8;
+            byte[] errorBytes = inputBytes.clone();
+
+            for (int byteIndex = 0; byteIndex < errorBytes.length; byteIndex++) {
+                errorBytes[byteIndex] ^= 1 << random.nextInt(byteLength - 1);
+            }
+
+            return errorBytes;
+        }
+
+
+    }
+  learner_created: true
+- name: encoded.txt
+  visible: true
+  text: "\x0f�3<3���\x0f�\0<\0���\x0f��3\0\0��\x0f�3<3\0�\0\x0f\0\0<\x0f\0�3\x0f�\
+    3<\0���\x0f��3\0\0�3\x0f��<<\0��\x0f��<3��\x0f\x0f�33\0\0��\x0f�3<3���"
+  learner_created: true
+- name: src/correcter/Menu.java
+  visible: true
+  text: |+
+    package correcter;
+
+    import java.io.File;
+    import java.io.IOException;
+    import java.util.Scanner;
+
+
+    public class Menu {
+
+
+        /*
+         * Requests which mode should the program run to the user
+         */
+
+        private String modeRequest() {
+            Scanner scanner = new Scanner(System.in);
+            System.out.println("Write a mode:");
+            return scanner.next();
+        }
+
+
+        /*
+         * Runs program according to requested mode
+         */
+
+        public void modeAnswer() throws IOException {
+            switch (modeRequest()) {
+                case "encode":
+                    encodeMode();
+                    break;
+                case "send":
+                    sendMode();
+                    break;
+                case "decode":
+                    decodeMode();
+                    break;
+                default:
+                    System.out.println("Error, mode not recognized");
+            }
+        }
+
+
+        /*
+         * Output information for encode mode
+         */
+        private void encodeMode() throws IOException {
+            FileProcessing fp = new FileProcessing();
+            StringProcessor sp = new StringProcessor();
+            String pathInput = "send.txt";
+            String input = fp.inputReader(pathInput);
+
+
+
+            System.out.printf("\n%s\n", pathInput);
+            System.out.printf("text view: %s\n", input);
+            String inputToHex = sp.formatHexArray(sp.stringToHex(input));
+            System.out.printf("hex view: %s\n", inputToHex);
+            String inputToByte = sp.byteArrayToString(sp.stringToByteArray(input));
+            System.out.printf("bin view: %s\n", inputToByte);
+            System.out.println();
+            String pathOutput = "encoded.txt";
+            System.out.printf("\n%s\n", pathOutput);
+            String expandedBytes = sp.expandedBytes(sp.stringToByteArray(input));
+            System.out.printf("expand: %s\n", expandedBytes);
+            String parityBytes = sp.stringFromStringArray(sp.parityBytes(expandedBytes));
+            System.out.printf("parity: %s\n", parityBytes);
+            String parityHex = sp.stringFromStringArray(sp.byteArrayToHexArray(sp.parityBytes(expandedBytes)));
+            System.out.printf("hex view: %s", parityHex);
+            fp.fileWriterEncode(parityBytes);
+        }
+
+
+        /*
+         * Output information for send mode
+         */
+        private void sendMode() throws IOException {
+            Randomizer randomizer = new Randomizer();
+            FileProcessing fp = new FileProcessing();
+            StringProcessor sp = new StringProcessor();
+            String pathInput = "encoded.txt";
+            byte[] input = fp.inputBytes(pathInput);
+    /*
+            System.out.printf("\n%s\n", pathInput);
+            String inputToHex = sp.formatHexArray(sp.stringToHex(input));
+            System.out.printf("hex view: %s\n", inputToHex);
+            String inputToByte = sp.byteArrayToString(sp.stringToByteArray(input));
+            System.out.printf("bin view: %s\n", inputToByte);
+            System.out.println();*/
+            String pathOutput = "received.txt";
+            System.out.printf("\n%s\n", pathOutput);
+            String errorMessage = sp.byteArrayToString(randomizer.byteRandomizer(input));
+            System.out.printf("bin view: %s\n", errorMessage);
+            String hexErrorMessage = sp.stringFromStringArray(sp.byteArrayToHexArray(errorMessage.split(" ")));
+            System.out.printf("hex view: %s", hexErrorMessage);
+            fp.fileWriterSend(errorMessage);
+        }
+
+
+
+
+        /*
+         * Output information for decode mode
+         */
+        private void decodeMode() throws IOException {
+            FileProcessing fp = new FileProcessing();
+            StringProcessor sp = new StringProcessor();
+            String pathInput = "received.txt";
+            byte[] input = fp.inputBytes(pathInput);
+            System.out.printf("\n%s\n", pathInput);
+            /*
+            String inputToHex = sp.formatHexArray(sp.stringToHex(input));
+            System.out.printf("hex view: %s\n", inputToHex);
+            String inputToByte = sp.byteArrayToString(sp.stringToByteArray(input));
+            System.out.println(inputToByte);*/
+            System.out.println();
+            String pathOutput = "decoded.txt";
+            System.out.printf("\n%s\n", pathOutput);
+            String correctBytes = sp.stringFromStringArray(sp.correctByteStrings(sp.byteArrayToString(input).split(" ")));
+            System.out.printf("correct: %s\n", correctBytes);
+            String decodedBytes = sp.decodedByteString(correctBytes);
+            System.out.printf("decode: %s\n", decodedBytes);
+            String removedBytes = sp.removeLastByte(decodedBytes);
+            System.out.printf("remove: %s\n", removedBytes);
+            String hexClean = sp.stringFromStringArray(sp.byteArrayToHexArray(removedBytes.split(" ")));
+            System.out.printf("hex view: %s\n", hexClean);
+            String finalText = sp.hexStringToText(hexClean);
+            System.out.printf("test view: %s", finalText);
+            fp.fileWriterDecode(removedBytes);
+
+        }
+
+
+
+
+    }
+
+  learner_created: true
+- name: src/correcter/FileProcessing.java
+  visible: true
+  text: |+
+    package correcter;
+
+    import java.io.*;
+    import java.nio.file.Files;
+    import java.nio.file.Path;
+    import java.nio.file.Paths;
+
+    public class FileProcessing {
+
+
+        /*
+         * Returns a string of the read file
+         */
+        public String inputReader(String path) throws IOException {
+            FileReader fileReader = new FileReader(path);
+            BufferedReader reader = new BufferedReader(fileReader);
+            StringBuilder auxString = new StringBuilder();
+            String line;
+            while((line = reader.readLine()) != null) {
+                auxString.append(line);
+            }
+            reader.close();
+            return auxString.toString();
+        }
+
+        public byte[] inputBytes(String path) throws IOException {
+            Path p = Paths.get(path);
+            return Files.readAllBytes(p);
+        }
+
+
+        /*
+         * Creates a a file from a given array of bytes
+         */
+        public void incorrectOutput(byte[] errorBytes) throws IOException {
+            File received = new File("received.txt");
+            FileWriter writer = new FileWriter(received);
+            for (byte charbytes : errorBytes) {
+                writer.append((char) charbytes);
+            }
+            writer.close();
+        }
+
+
+
+        /*
+         * writes data for Encode mode
+         */
+        public File fileWriterEncode(String parityBytes) throws IOException {
+            File encoded = new File("encoded.txt");
+            OutputStream outputStream = new FileOutputStream(encoded);
+            StringProcessor sp = new StringProcessor();
+            String[] byteArray = parityBytes.split(" ");
+            for (int i = 0; i < byteArray.length; i++) {
+                outputStream.write((byte) Integer.parseInt(byteArray[i], 2));
+            }
+            return encoded;
+        }
+
+
+        /*
+         * writes data for send mode
+         */
+        public File fileWriterSend(String errorMessage) throws IOException {
+            File received = new File("received.txt");
+            OutputStream outputStream = new FileOutputStream(received);
+            StringProcessor sp = new StringProcessor();
+            String[] byteArray = errorMessage.split(" ");
+            for (int i = 0; i < byteArray.length; i++) {
+                outputStream.write((byte) Integer.parseInt(byteArray[i], 2));
+            }
+            return received;
+        }
+
+        /*
+         * writes data for send mode
+         */
+        public File fileWriterDecode(String removedBytes) throws IOException {
+            File decoded = new File("decoded.txt");
+            OutputStream outputStream = new FileOutputStream(decoded);
+            StringProcessor sp = new StringProcessor();
+            String[] byteArray = removedBytes.split(" ");
+            for (int i = 0; i < byteArray.length; i++) {
+                outputStream.write((byte) Integer.parseInt(byteArray[i], 2));
+            }
+            return decoded;
+        }
+
+
+
+
+
+
+
+
+
+    }
+
+  learner_created: true
+- name: received.txt
+  visible: true
+  text: "\a�;>\x13���\x0e�\x018\x10���\v��#\x10@��\v�7>s\b�\bO\x10 \x1c\x1f\b�s/�\
+    s|\x02���\x1f��;\b\x10�#\n��|4\x02��O��,s��\vO�\x13s\x02@��\a�\x1347�Ќ"
+  learner_created: true
+feedback_link: https://hyperskill.org/projects/58/stages/316/implement
+status: Solved
+feedback:
+  message: Congratulations! Continue on <a href="https://hyperskill.org/projects/58/stages/316/implement">JetBrains
+    Academy</a>
+  time: Tue, 30 Mar 2021 20:25:04 UTC
+record: -1
